@@ -225,7 +225,7 @@ spec:
     spec:
       containers:
        - name: mongo
-         image: cgacr711.azurecr.io/711/cnp-mongo:1.5.2
+         image: sktestmaincrn.azurecr.io/sktestmain711/cnp-mongo:1.5.2
          command:
           - mongod
           - "--bind_ip"
@@ -243,7 +243,7 @@ spec:
            mountPath: "/data"
       initContainers:
         - name: mongo1
-          image: cgacr711.azurecr.io/711/cnp-mongo:1.5.2
+          image: sktestmaincrn.azurecr.io/sktestmain711/cnp-mongo:1.5.2
           volumeMounts:
           - name: aws-mongo
             mountPath: "/empty"
@@ -285,7 +285,7 @@ spec:
     spec:
       containers:
         - name: kc
-          image: cgacr711.azurecr.io/711/cnp-keycloak:cnpkeycloak0.2
+          image: sktestmaincrn.azurecr.io/sktestmain711/cnp-keycloak:cnpkeycloak0.2
           resources:
             requests:
               cpu: 100m
@@ -322,7 +322,7 @@ spec:
             mountPath: "/opt/jboss/keycloak/standalone/data"
       initContainers:
         - name: kc1
-          image: cgacr711.azurecr.io/711/cnp-keycloak:cnpkeycloak0.2
+          image: sktestmaincrn.azurecr.io/sktestmain711/cnp-keycloak:cnpkeycloak0.2
           volumeMounts:
           - name: aws-kc
             mountPath: "/opt/jboss/keycloak/standalone/empty"
@@ -373,7 +373,7 @@ spec:
     spec:
       containers:
         - name: jenkins
-          image: cgacr711.azurecr.io/711/cnp-jenkins:nexgen711.1
+          image: sktestmaincrn.azurecr.io/sktestmain711/cnp-jenkins:nexgen711.1
           imagePullPolicy: Always
           resources:
             requests:
@@ -407,7 +407,7 @@ spec:
             mountPath: "/var/jenkins_home/"
       initContainers:
         - name: init-jenkins
-          image: cgacr711.azurecr.io/711/cnp-jenkins:nexgen711.1
+          image: sktestmaincrn.azurecr.io/sktestmain711/cnp-jenkins:nexgen711.1
           volumeMounts:
           - name: aws-jenkins
             mountPath: "/var/test"
@@ -461,7 +461,7 @@ spec:
     spec:
       containers:
         - name: git
-          image: cgacr711.azurecr.io/711/cnp-git:nexgen711.2
+          image: sktestmaincrn.azurecr.io/sktestmain711/cnp-git:nexgen711.2
           imagePullPolicy: Always
           resources:
             requests:
@@ -495,7 +495,7 @@ spec:
                 command: ["/bin/bash", "-c", "sleep 240 && apt-get update && apt-get install git -y  && bash /root/config/gittoken.sh && sleep 120 && sed -i 's/giturl/'$TENANT_NAME'.'$DOMAIN'/g' /root/gitlab.rb && sed -i 's/keycloalurl/'$TENANT_NAME'.'$DOMAIN'/g' /root/gitlab.rb && cp /root/gitlab.rb /etc/gitlab/gitlab.rb && gitlab-ctl reconfigure"]
       initContainers:
         - name: git1
-          image: cgacr711.azurecr.io/711/cnp-git:nexgen711.2
+          image: sktestmaincrn.azurecr.io/sktestmain711/cnp-git:nexgen711.2
           volumeMounts:
           - name: aws-git
             mountPath: "/var/opt/empty"
@@ -782,7 +782,7 @@ spec:
                 secretKeyRef:
                   name: portal-secret
                   key: react_app_is107
-          image: cgacr711.azurecr.io/711/cnp-webui:n3xgen0.49
+          image: sktestmaincrn.azurecr.io/sktestmain711/cnp-webui:n3xgen0.49
           imagePullPolicy: Always
           resources:
             requests:
@@ -799,7 +799,7 @@ spec:
             - name: port5005
               containerPort: 5005
         - name: adminservice
-          image: cgacr711.azurecr.io/711/cnp-adminservice:n3xgen0.22
+          image: sktestmaincrn.azurecr.io/sktestmain711/cnp-adminservice:n3xgen0.22
           imagePullPolicy: Always
           resources:
             requests:
@@ -913,7 +913,7 @@ spec:
     spec:
       containers:
         - name: ldap
-          image: cgacr711.azurecr.io/711/ldap:cnpldap0.1
+          image: sktestmaincrn.azurecr.io/sktestmain711/ldap:cnpldap0.1
           resources:
             requests:
               cpu: 50m

@@ -1,0 +1,19 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: elasticsearch
+  annotations:
+    kubernetes.io/ingress.class: azure/application-gateway
+    appgw.ingress.kubernetes.io/health-probe-status-codes: "200-502"
+spec:
+  tls:
+    - hosts:
+      - elasticsearch.711.n3xgen.io
+      secretName: tls-secret
+  rules:
+  - host: elasticsearch.711.n3xgen.io
+    http:
+      paths:
+      - backend:
+          serviceName: elasticsearch-client
+          servicePort: 9200

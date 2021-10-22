@@ -1,0 +1,985 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: devsc
+provisioner: kubernetes.io/azure-disk
+volumeBindingMode: WaitForFirstConsumer
+parameters:
+  skuName: Standard_LRS
+  location: westus2
+allowedTopologies:
+  - matchLabelExpressions:
+      - key: failure-domain.beta.kubernetes.io/zone
+        values:
+          - westus2-1
+          - westus2-2
+          - westus2-3
+---          
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: managed-nfs-storage
+  annotations: 
+    storageclass.kubernetes.io/is-default-class: "false"
+provisioner: 10.35.248.4
+parameters:
+  archiveOnDelete: "false"
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: git-pvc
+spec:
+  capacity:
+    storage: 4Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Recycle 
+  storageClassName: managed-nfs-storage    
+  nfs:
+    path: /var/nfsshare/git
+    server: 10.35.248.4
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: git-pvc
+spec:
+  storageClassName: managed-nfs-storage
+  accessModes:
+    - ReadWriteMany
+  resources:
+     requests:
+       storage: 4Gi
+  volumeName: "git-pvc"
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: jenkins-pvc
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Recycle 
+  storageClassName: managed-nfs-storage    
+  nfs:
+    path: /var/nfsshare/ci
+    server: 10.35.248.4
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jenkins-pvc
+spec:
+  storageClassName: managed-nfs-storage
+  accessModes:
+  - ReadWriteMany
+  resources:
+     requests:
+       storage: 5Gi
+  volumeName: "jenkins-pvc" 
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: kc-pvc
+spec:
+  capacity:
+    storage: 4Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Recycle 
+  storageClassName: managed-nfs-storage    
+  nfs:
+    path: /var/nfsshare/kc
+    server: 10.35.248.4
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kc-pvc
+spec:
+  storageClassName: managed-nfs-storage
+  accessModes:
+  - ReadWriteMany
+  resources:
+     requests:
+       storage: 4Gi
+  volumeName: "kc-pvc"
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mongo-pvc
+spec:
+  capacity:
+    storage: 4Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Recycle 
+  storageClassName: managed-nfs-storage    
+  nfs:
+    path: /var/nfsshare/mongo
+    server: 10.35.248.4
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongo-pvc
+spec:
+  storageClassName: managed-nfs-storage
+  accessModes:
+  - ReadWriteMany
+  resources:
+     requests:
+       storage: 4Gi
+  volumeName: "mongo-pvc"
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: etcldap-pvc
+spec:
+  capacity:
+    storage: 2Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Recycle 
+  storageClassName: managed-nfs-storage    
+  nfs:
+    path: /var/nfsshare/etcldap
+    server: 10.35.248.4
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: etcldap-pvc
+spec:
+  storageClassName: managed-nfs-storage
+  accessModes:
+  - ReadWriteMany
+  resources:
+     requests:
+       storage: 2Gi
+  volumeName: "etcldap-pvc"
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: varldap-pvc
+spec:
+  capacity:
+    storage: 2Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Recycle 
+  storageClassName: managed-nfs-storage    
+  nfs:
+    path: /var/nfsshare/varldap
+    server: 10.35.248.4
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: varldap-pvc
+spec:
+  storageClassName: managed-nfs-storage
+  accessModes:
+  - ReadWriteMany
+  resources:
+     requests:
+       storage: 2Gi
+  volumeName: "varldap-pvc"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+  labels:
+    app: mongo
+spec:
+  ports:
+  - name: mongo
+    port: 27017
+    targetPort: 27017
+  selector:
+    app: mongo
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongo
+spec:
+  selector:
+    matchLabels:
+      app: mongo
+  serviceName: "mongo"
+  replicas: 1
+  podManagementPolicy: Parallel
+  template:
+    metadata:
+      labels:
+        app: mongo
+    spec:
+      containers:
+       - name: mongo
+         image: cgacr711.azurecr.io/711/cnp-mongo:1.5.2
+         command:
+          - mongod
+          - "--bind_ip"
+          - 0.0.0.0
+          - "--smallfiles"
+          - "--noprealloc"
+         ports:
+          - containerPort: 27017
+         lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/bash", "-c", "sleep 20s && cp /test.js /data/ "]
+         volumeMounts:
+         - name: aws-mongo
+           mountPath: "/data"
+      initContainers:
+        - name: mongo1
+          image: cgacr711.azurecr.io/711/cnp-mongo:1.5.2
+          volumeMounts:
+          - name: aws-mongo
+            mountPath: "/empty"
+          command: ["/bin/bash", "-c", "apt-get update && apt-get install rsync -y && rsync -rv --ignore-existing /data/* /empty"]
+      volumes:
+        - name: aws-mongo
+          persistentVolumeClaim:
+            claimName: mongo-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kc
+  labels:
+    app: cnp-kc
+spec:
+  ports:
+    - port: 80
+      name: kc
+      targetPort: 8080
+  selector:
+    app: cnp-kc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kc
+  labels:
+    app: cnp-kc
+spec:
+  selector:
+    matchLabels:
+      app: cnp-kc
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: cnp-kc
+    spec:
+      containers:
+        - name: kc
+          image: cgacr711.azurecr.io/711/cnp-keycloak:cnpkeycloak0.2
+          resources:
+            requests:
+              cpu: 100m
+              memory: 100Mi
+            limits:
+              cpu: 300m
+              memory: 600Mi          
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: kc
+          env:
+            - name: TENANT_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: tenant-secret
+                  key: tenant_name
+            - name: DOMAIN
+              valueFrom:
+                secretKeyRef:
+                  name: tenant-secret
+                  key: domain
+            - name: DN
+              valueFrom:
+                secretKeyRef:
+                  name: ldap-secret
+                  key: dn          
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/bash", "-c", "sleep 60s && /opt/jboss/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080/auth --realm master --user cnpadmin --password cnpadmin && /opt/jboss/keycloak/bin/createclient.sh && sed -i 's/$dn/'$DN'/g' /opt/jboss/keycloak/bin/createcomponent.sh  && /opt/jboss/keycloak/bin/createcomponent.sh"]
+          volumeMounts:
+          - name: aws-kc
+            mountPath: "/opt/jboss/keycloak/standalone/data"
+      initContainers:
+        - name: kc1
+          image: cgacr711.azurecr.io/711/cnp-keycloak:cnpkeycloak0.2
+          volumeMounts:
+          - name: aws-kc
+            mountPath: "/opt/jboss/keycloak/standalone/empty"
+          command: ["/bin/bash", "-c", "rsync -rv --ignore-existing /opt/jboss/keycloak/standalone/data/* /opt/jboss/keycloak/standalone/empty/"]
+      imagePullSecrets:
+        - name: myregistrykey
+      volumes:
+        - name: aws-kc
+          persistentVolumeClaim:
+            claimName: kc-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins
+  labels:
+    app: jenkins
+    name: jenkins
+spec:
+  ports:
+    - name: port8080
+      port: 80
+      targetPort: 8080
+    - name: port50000
+      port: 50000
+      targetPort: 50000
+
+  selector:
+    app: jenkins
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jenkins
+  labels:
+    app: jenkins
+spec:
+  selector:
+    matchLabels:
+      app: jenkins
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: jenkins
+    spec:
+      containers:
+        - name: jenkins
+          image: cgacr711.azurecr.io/711/cnp-jenkins:nexgen711.1
+          imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1250Mi
+            limits:
+              cpu: 800m
+              memory: 2000Mi          
+          ports:
+            - name: port8080
+              containerPort: 8080
+            - name: port50000
+              containerPort: 50000
+          env:
+            - name: TENANT_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: tenant-secret
+                  key: tenant_name
+            - name: DOMAIN
+              valueFrom:
+                secretKeyRef:
+                  name: tenant-secret
+                  key: domain
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/bash", "-c", "sed -i 's/web.cgdemos.com/web.'$TENANT_NAME'.'$DOMAIN'/g' org.jenkinsci.plugins.corsfilter.AccessControlsFilter.xml && sed -i 's/auth.cnp.changemaker.community/auth.'$TENANT_NAME'.'$DOMAIN'/g' org.jenkinsci.plugins.KeycloakSecurityRealm.xml"]
+          volumeMounts:
+          - name: aws-jenkins
+            mountPath: "/var/jenkins_home/"
+      initContainers:
+        - name: init-jenkins
+          image: cgacr711.azurecr.io/711/cnp-jenkins:nexgen711.1
+          volumeMounts:
+          - name: aws-jenkins
+            mountPath: "/var/test"
+          command: ["/bin/bash", "-c", "yum install rsync -y && rsync -rv --exclude=/war --ignore-existing /var/jenkins_home/* /var/test"]
+
+      imagePullSecrets:
+        - name: myregistrykey
+      volumes:
+        - name: aws-jenkins
+          persistentVolumeClaim:
+            claimName: jenkins-pvc
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gittoken-config
+data:
+  gittoken.sh: |-
+    gitlab-rails runner "token = User.find_by_username('root').personal_access_tokens.create(scopes: [:api, :read_user, :sudo, :read_repository], name: 'git token'); token.set_token('bMisACjWsU6Uiah3b8N'); token.save!"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: git
+  labels:
+    app: cnp-git
+spec:
+  ports:
+    - port: 80
+      name: git
+      targetPort: 80
+  selector:
+    app: cnp-git
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: git
+  labels:
+    app: cnp-git
+spec:
+  selector:
+    matchLabels:
+      app: cnp-git
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: cnp-git
+    spec:
+      containers:
+        - name: git
+          image: cgacr711.azurecr.io/711/cnp-git:nexgen711.2
+          imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: 800m
+              memory: 3072Mi
+            limits:
+              cpu: 1000m
+              memory: 4096Mi          
+          ports:
+            - containerPort: 5555
+              name: git
+          env:
+            - name: TENANT_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: tenant-secret
+                  key: tenant_name
+            - name: DOMAIN
+              valueFrom:
+                secretKeyRef:
+                  name: tenant-secret
+                  key: domain
+          volumeMounts:
+          - name: aws-git
+            mountPath: "/var/opt/gitlab/"
+          - name: aws-config
+            mountPath: "/root/config"
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/bash", "-c", "sleep 240 && apt-get update && apt-get install git -y  && bash /root/config/gittoken.sh && sleep 120 && sed -i 's/giturl/'$TENANT_NAME'.'$DOMAIN'/g' /root/gitlab.rb && sed -i 's/keycloalurl/'$TENANT_NAME'.'$DOMAIN'/g' /root/gitlab.rb && cp /root/gitlab.rb /etc/gitlab/gitlab.rb && gitlab-ctl reconfigure"]
+      initContainers:
+        - name: git1
+          image: cgacr711.azurecr.io/711/cnp-git:nexgen711.2
+          volumeMounts:
+          - name: aws-git
+            mountPath: "/var/opt/empty"
+          command: ["/bin/bash", "-c", "apt update && apt-get install rsync -y && rsync -rv --ignore-existing /var/opt/gitlab/* /var/opt/empty"]
+      imagePullSecrets:
+        - name: myregistrykey
+      volumes:
+        - name: aws-git
+          persistentVolumeClaim:
+            claimName: git-pvc
+        - name: aws-config
+          configMap:
+            name: gittoken-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cnp-portal-svc
+  labels:
+    app: cnp-portal
+    tier: frontend
+spec:
+  ports:
+    - port: 80
+      name: port80
+      targetPort: 5008
+    - port: 8080
+      name: port8080
+      targetPort: 8080
+    - port: 5005
+      name: port5005
+      targetPort: 5005
+    - port: 5002
+      name: port5002
+      targetPort: 5002
+  selector:
+    app: cnp-portal
+    tier: frontend
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cnp-portal
+  labels:
+    app: cnp-portal
+spec:
+  selector:
+    matchLabels:
+      app: cnp-portal
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: cnp-portal
+        tier: frontend
+    spec:
+      containers:
+        - name: frontend-app
+          env:
+            - name: MONGO_SERVICE_HOST
+              value: mongo
+            - name: TENANT_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: tenant-secret
+                  key: tenant_name
+            - name: DOMAIN
+              valueFrom:
+                secretKeyRef:
+                  name: tenant-secret
+                  key: domain
+            - name: REACT_APP_GRAPHQL
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: graphql_url
+            - name: REACT_APP_GITLAB
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: gitlab_url
+            - name: REACT_APP_GITLABTOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: gitlab_token
+            - name: REACT_APP_GITLABCREDENTIALS
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: gitlab_credentials
+            - name: REACT_APP_JENKINSPORT
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: jenkins_port
+            - name: REACT_APP_JENKINSHOST
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: jenkins_host
+            - name: REACT_APP_JENKINSAUTH
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: jenkins_auth
+            - name: REACT_APP_ADMINSERVICE
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: adminservice_url
+            - name: REACT_APP_SOURCEIS
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: source_IS
+            - name: REACT_APP_MYDNS
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: my_DNS
+            - name: REACT_APP_AUTHORNAME
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: Author_Name
+            - name: REACT_APP_AUTHOREMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: Author_Email
+            - name: HOST
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: mongo_Host
+            - name: REACT_APP_DEPLOYERWM
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: Deployer_WM
+            - name: REACT_APP_DEPLOYERWMAUTHORIZATION
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: Deployer_WM_Authorization
+            - name: REACT_APP_LOCALPORT
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: Local_Port
+            - name: REACT_APP_LOCAL
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: node_url
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: mongo_Host
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: db_name
+            - name: REACT_APP_REALM
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: Keycloak_realm
+            - name: REACT_APP_AUTHSERVERURL
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: Keycloak_url
+            - name: REACT_APP_RESOURCE
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: Keycloak_client
+            - name: REACT_APP_GRAFANA
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: Grafana_url
+            - name: REACT_APP_KIBANA
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: Kibana_url
+            - name: GRAPHQL_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: graphql_port
+            - name: FRONTEND_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: frontend_port
+            - name: NODE_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: node_port
+            - name: CLUSTER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: cluster_url
+            - name: CLUSTER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: cluster_token
+            - name: CLUSTER_NAMESPACE
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: cluster_namespace
+            - name: AWS_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: aws_region
+            - name: AWS_ACCESSKEYID
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: aws_accesskey
+            - name: AWS_SECRETACCESSKEY
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: aws_secretkey
+            - name: REACT_APP_GITCREDSURL_FOR_JENKINS
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: giturl_jenkins
+            - name: ELASTIC_URL
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: Elastic_url
+            - name: REACT_APP_BUILDIS
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: Build_IS
+            - name: MONGODBHOSTNAME
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: mongo_hostname
+            - name: MONGODBPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: mongo_pass
+            - name: REACT_APP_PUBLIC_URL
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: react_app_url
+            - name: REACT_APP_IS103
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: react_app_is103
+            - name: REACT_APP_IS105
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: react_app_is105
+            - name: REACT_APP_CLUSTER
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: react_app_cluster
+            - name: REACT_APP_IS107
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: react_app_is107
+          image: cgacr711.azurecr.io/711/cnp-webui:n3xgen0.49
+          imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
+            limits:
+              cpu: 500m
+              memory: 30000Mi          
+          ports:
+            - name: port80
+              containerPort: 5008
+            - name: port8080
+              containerPort: 8080
+            - name: port5005
+              containerPort: 5005
+        - name: adminservice
+          image: cgacr711.azurecr.io/711/cnp-adminservice:n3xgen0.22
+          imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: 100m
+              memory: 100Mi
+            limits:
+              cpu: 300m
+              memory: 300Mi          
+          env:
+            - name: TENANT_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: tenant-secret
+                  key: tenant_name
+            - name: DOMAIN
+              valueFrom:
+                secretKeyRef:
+                  name: tenant-secret
+                  key: domain
+            - name: DNS
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: dns
+            - name: TENANT_DEV
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: tenant_dev
+            - name: TENANT_QA
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: tenant_qa
+            - name: VM_CLIENT
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: vm_client
+            - name: TENANT
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: tenant
+            - name: ADMINSERVICE_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: adminservice_port
+            - name: AZRAPPID
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: azapp_id
+            - name: AZRPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: az_password
+            - name: AZRTENANT
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secret
+                  key: az_tenant
+          volumeMounts:
+          - name: kubeconfigs
+            mountPath: "/usr/src/site/deploy/kubeconfigs"
+            readOnly: true                  
+          ports:
+            - name: port5002
+              containerPort: 5002
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/bash", "-c", "cp /usr/src/site/deploy/kubeconfigs/dev /usr/src/site/dev && chmod 777 /usr/src/site/deploy/*.sh "]              
+      imagePullSecrets:
+        - name: myregistrykey
+      volumes:
+        - name: kubeconfigs
+          configMap:
+            name: sakubeconfigs          
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: ldap
+  name: ldap-service
+spec:
+  ports:
+    - port: 389
+  selector:
+    app: ldap
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ldap
+  labels:
+    app: ldap
+spec:
+  selector:
+    matchLabels:
+      app: ldap
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: ldap
+    spec:
+      containers:
+        - name: ldap
+          image: cgacr711.azurecr.io/711/ldap:cnpldap0.1
+          resources:
+            requests:
+              cpu: 50m
+              memory: 50Mi
+            limits:
+              cpu: 200m
+              memory: 200Mi          
+          ports:
+            - containerPort: 389
+              name: openldap
+          env:
+            - name: TENANT_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: tenant-secret
+                  key: tenant_name
+            - name: DOMAIN
+              valueFrom:
+                secretKeyRef:
+                  name: tenant-secret
+                  key: domain
+            - name: DN
+              valueFrom:
+                secretKeyRef:
+                  name: ldap-secret
+                  key: dn
+            - name: SLAPD_DOMAIN
+              valueFrom:
+                secretKeyRef:
+                  name: ldap-secret
+                  key: ldapserver
+            - name: SLAPD_PASSWORD
+              value: "password"
+            - name: LDAP_BACKEND
+              value: "mdb"
+            - name: LDAP_REPLICATION
+              value: "false"
+            - name: LDAP_REPLICATION_CONFIG_SYNCPROV
+              value: "binddn=\"cn=admin,cn=config\" bindmethod=simple credentials=$LDAP_CONFIG_PASSWORD searchbase=\"cn=config\" type=refreshAndPersist retry=\"60 +\" timeout=1 starttls=critical"
+            - name: LDAP_REPLICATION_DB_SYNCPROV
+              value: "binddn=\"cn=admin,$LDAP_BASE_DN\" bindmethod=simple credentials=$LDAP_ADMIN_PASSWORD searchbase=\"$LDAP_BASE_DN\" type=refreshAndPersist interval=00:00:00:10 retry=\"60 +\" timeout=1 starttls=critical"
+            - name: LDAP_REPLICATION_HOSTS
+              value: "#PYTHON2BASH:['ldap://ldap-one-service', 'ldap://ldap-two-service']"
+            - name: KEEP_EXISTING_CONFIG
+              value: "false"
+            - name: LDAP_REMOVE_CONFIG_AFTER_SETUP
+              value: "true"
+            - name: LDAP_SSL_HELPER_PREFIX
+              value: "ldap"
+          volumeMounts:
+          - name: aws-etcldap
+            mountPath: "/etc/ldap"
+          - name: aws-varldap
+            mountPath: "/var/lib/ldap"
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/bash", "-c", "sed -i 's/padl.com/'$SLAPD_DOMAIN'/g' /usr/share/migrationtools/migrate_common.ph && sed -i 's/dc=padl,dc=com/'$DN'/g' /usr/share/migrationtools/migrate_common.ph && sed -i 's/dc=infra, dc=cgdemos, dc=com/'$DN'/g' /people_group.ldif && sed -i 's/cn=admin,usergroup/cn=admin,'$DN'/g' /ldapadd.sh && sleep 60s   && /ldapadd.sh "]
+      volumes:
+        - name: aws-etcldap
+          persistentVolumeClaim:
+            claimName: etcldap-pvc
+        - name: aws-varldap
+          persistentVolumeClaim:
+            claimName: varldap-pvc
+
+
+
+---

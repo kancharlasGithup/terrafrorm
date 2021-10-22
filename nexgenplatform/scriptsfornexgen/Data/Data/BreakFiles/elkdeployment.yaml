@@ -1,0 +1,571 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elasticsearch-master-config
+  labels:
+    app: elasticsearch
+    role: master
+data:
+  elasticsearch.yml: |-
+    cluster.name: ${CLUSTER_NAME}
+    node.name: ${NODE_NAME}
+    discovery.seed_hosts: ${NODE_LIST}
+    cluster.initial_master_nodes: ${MASTER_NODES}
+    network.host: 0.0.0.0
+    node:
+      master: true
+      data: false
+      ingest: false
+    xpack.security.enabled: true
+    xpack.monitoring.collection.enabled: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-master
+  labels:
+    app: elasticsearch
+    role: master
+spec:
+  ports:
+  - port: 9300
+    name: transport
+  selector:
+    app: elasticsearch
+    role: master
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elasticsearch-master
+  labels:
+    app: elasticsearch
+    role: master
+spec:
+  selector:
+    matchLabels:
+      app: elasticsearch
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticsearch
+      role: master
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+        role: master
+    spec:
+      containers:
+      - name: elasticsearch-master
+        image: cgacr711.azurecr.io/711/elasticsearch-master:7.3.0
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+          limits:
+            cpu: 500m
+            memory: 2048Mi
+        env:
+        - name: CLUSTER_NAME
+          value: elasticsearch
+        - name: NODE_NAME
+          value: elasticsearch-master
+        - name: NODE_LIST
+          value: elasticsearch-master,elasticsearch-data,elasticsearch-client
+        - name: MASTER_NODES
+          value: elasticsearch-master
+        - name: "ES_JAVA_OPTS"
+          value: "-Xms798m -Xmx798m"
+        securityContext:
+          capabilities:
+            add:
+              - SYS_CHROOT  
+        ports:
+        - containerPort: 9300
+          name: transport
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/elasticsearch/config/elasticsearch.yml
+          readOnly: true
+          subPath: elasticsearch.yml
+        - name: storage
+          mountPath: /data
+      volumes:
+      - name: config
+        configMap:
+          name: elasticsearch-master-config
+      - name: "storage"
+        emptyDir:
+          medium: ""
+      initContainers:
+      - name: increase-vm-max-map
+        image: busybox
+        command: ["sysctl", "-w", "vm.max_map_count=999144"]
+        securityContext:
+          privileged: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elasticsearch-client-config
+  labels:
+    app: elasticsearch
+    role: client
+data:
+  elasticsearch.yml: |-
+    cluster.name: ${CLUSTER_NAME}
+    node.name: ${NODE_NAME}
+    discovery.seed_hosts: ${NODE_LIST}
+    cluster.initial_master_nodes: ${MASTER_NODES}
+    network.host: 0.0.0.0
+    node:
+      master: false
+      data: false
+      ingest: true
+    xpack.security.enabled: true
+    xpack.monitoring.collection.enabled: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-client
+  labels:
+    app: elasticsearch
+    role: client
+spec:
+  ports:
+  - port: 9200
+    name: client
+  - port: 9300
+    name: transport
+  selector:
+    app: elasticsearch
+    role: client
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elasticsearch-client
+  labels:
+    app: elasticsearch
+    role: client
+spec:
+  selector:
+    matchLabels:
+      app: elasticsearch
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticsearch
+      role: client
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+        role: client
+    spec:
+      containers:
+      - name: elasticsearch-client
+        image: cgacr711.azurecr.io/711/elasticsearch-client:7.3.0
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+          limits:
+            cpu: 500m
+            memory: 2048Mi
+        env:
+        - name: CLUSTER_NAME
+          value: elasticsearch
+        - name: NODE_NAME
+          value: elasticsearch-client
+        - name: NODE_LIST
+          value: elasticsearch-master,elasticsearch-data,elasticsearch-client
+        - name: MASTER_NODES
+          value: elasticsearch-master
+        - name: "ES_JAVA_OPTS"
+          value: "-Xms799m -Xmx799m"
+        securityContext:
+          capabilities:
+            add:
+              - SYS_CHROOT          
+        ports:
+        - containerPort: 9200
+          name: client
+        - containerPort: 9300
+          name: transport
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/elasticsearch/config/elasticsearch.yml
+          readOnly: true
+          subPath: elasticsearch.yml
+        - name: storage
+          mountPath: /data
+      volumes:
+      - name: config
+        configMap:
+          name: elasticsearch-client-config
+      - name: "storage"
+        emptyDir:
+          medium: ""
+      initContainers:
+      - name: increase-vm-max-map
+        image: busybox
+        command: ["sysctl", "-w", "vm.max_map_count=999144"]
+        securityContext:
+          privileged: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elasticsearch-data-config
+  labels:
+    app: elasticsearch
+    role: data
+data:
+  elasticsearch.yml: |-
+    cluster.name: ${CLUSTER_NAME}
+    node.name: ${NODE_NAME}
+    discovery.seed_hosts: ${NODE_LIST}
+    cluster.initial_master_nodes: ${MASTER_NODES}
+    network.host: 0.0.0.0
+    node:
+      master: false
+      data: true
+      ingest: false
+    xpack.security.enabled: true
+    xpack.monitoring.collection.enabled: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-data
+  labels:
+    app: elasticsearch
+    role: data
+spec:
+  ports:
+  - port: 9300
+    name: transport
+  selector:
+    app: elasticsearch
+    role: data
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: elasticsearch-data
+  labels:
+    app: elasticsearch
+    role: data
+spec:
+  selector:
+    matchLabels:
+      app: elasticsearch
+  serviceName: "elasticsearch-data"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticsearch-data
+  template:
+    metadata:
+      labels:
+        app: elasticsearch-data
+        role: data
+    spec:
+      containers:
+      - name: elasticsearch-data
+        image: cgacr711.azurecr.io/711/elasticsearch-data:pass1.1
+        env:
+        - name: CLUSTER_NAME
+          value: elasticsearch
+        - name: NODE_NAME
+          value: elasticsearch-data
+        - name: NODE_LIST
+          value: elasticsearch-master,elasticsearch-data,elasticsearch-client
+        - name: MASTER_NODES
+          value: elasticsearch-master
+        - name: "ES_JAVA_OPTS"
+          value: "-Xms1250m -Xmx1250m"
+        ports:
+        - containerPort: 9300
+          name: transport
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+          limits:
+            cpu: 500m
+            memory: 2800Mi
+        lifecycle:
+          postStart:
+            exec:
+              command: ["/bin/bash", "-c", "rm -rf /usr/share/elasticsearch/data/nodes/0/_state "]
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/elasticsearch/config/elasticsearch.yml
+          readOnly: true
+          subPath: elasticsearch.yml
+        - name: elasticsearch-data-persistent-storage
+          mountPath: /usr/share/elasticsearch
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      volumes:
+      - name: config
+        configMap:
+          name: elasticsearch-data-config
+      initContainers:
+        - name: elasticmaster1
+          image: cgacr711.azurecr.io/711/elasticsearch-data:pass1.1
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+          volumeMounts:
+          - name: elasticsearch-data-persistent-storage
+            mountPath: "/usr/share/empty1"
+          command: ["/bin/bash", "-c", "rsync -rv --ignore-existing /usr/share/elasticsearch/* /usr/share/empty1"]
+
+  volumeClaimTemplates:
+  - metadata:
+      name: elasticsearch-data-persistent-storage
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 30Gi
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kibana-config
+  labels:
+    app: kibana
+data:
+  kibana.yml: |-
+    server.host: 0.0.0.0
+    elasticsearch:
+      hosts: ${ELASTICSEARCH_HOSTS}
+      username: ${ELASTICSEARCH_USER}
+      password: ${ELASTICSEARCH_PASSWORD}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana
+  labels:
+    app: kibana
+spec:
+  ports:
+  - port: 80
+    name: webinterface
+    targetPort: 5601
+  selector:
+    app: kibana
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana
+  labels:
+    app: kibana
+spec:
+  selector:
+    matchLabels:
+      app: kibana
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kibana
+  template:
+    metadata:
+      labels:
+        app: kibana
+    spec:
+      containers:
+      - name: kibana
+        image: cgacr711.azurecr.io/711/kibana:version7.3.0
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+          limits:
+            cpu: 500m
+            memory: 2048Mi
+        ports:
+        - containerPort: 5601
+          name: webinterface
+        env:
+        - name: ELASTICSEARCH_HOSTS
+          value: "http://elasticsearch-client:9200"
+        - name: ELASTICSEARCH_USER
+          value: "elastic"
+        - name: ELASTICSEARCH_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: elasticsearch-pw-elastic
+              key: password
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/kibana/config/kibana.yml
+          readOnly: true
+          subPath: kibana.yml
+      volumes:
+      - name: config
+        configMap:
+          name: kibana-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  annotations:
+      prometheus.io/scrape: 'true'
+      prometheus.io/port:   '3000'
+spec:
+  selector:
+    app: grafana
+  ports:
+    - port: 3000
+      targetPort: 3000
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+data:
+  prometheus.yaml: |-
+    {
+        "apiVersion": 1,
+        "datasources": [
+            {
+               "access":"proxy",
+               "name": "prometheus",
+               "type": "prometheus",
+               "orgId": 1,
+               "url": "http://prometheus-prometheus-oper-prometheus.$tenant.svc:9090",
+            }
+        ]
+    }
+  grafana.ini: |
+    [server]
+    domain = ${domain}
+    root_url = ${root_url}
+    [security]
+    admin_user = nextgenuser
+    admin_password = nextgenuser
+    [auth.generic_oauth]
+    enabled = true
+    name = OAuth
+    allow_sign_up = true
+    client_id = cnp-grafana
+    client_secret = 30d44237-97ea-4b10-8995-e2bff2ddd564
+    scopes = openid profile email
+    email_attribute_name = email
+    email_attribute_path = email
+    auth_url = ${auth_url}
+    token_url = ${token_url}
+    api_url = ${api_url}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      name: grafana
+      labels:
+        app: grafana
+    spec:
+      containers:
+      - name: grafana
+        image: cgacr711.azurecr.io/711/grafana:test0.7
+        ports:
+        - name: grafana
+          containerPort: 3000
+        env:
+        - name: root_url
+          valueFrom:
+            secretKeyRef:
+              name: grafana-secret
+              key: ROOT
+        - name: domain
+          valueFrom:
+            secretKeyRef:
+              name: grafana-secret
+              key: DNS_value
+        - name: auth_url
+          valueFrom:
+            secretKeyRef:
+              name: grafana-secret
+              key: AUTH_value
+        - name: token_url
+          valueFrom:
+            secretKeyRef:
+              name: grafana-secret
+              key: TOKEN_value
+        - name: api_url
+          valueFrom:
+            secretKeyRef:
+              name: grafana-secret
+              key: API_value
+        - name: TENANT_NAME
+          valueFrom:
+            secretKeyRef:
+              name: tenant-secret
+              key: tenant_name
+        - name: TENANT_DEV
+          valueFrom:
+            secretKeyRef:
+              name: portal-secret
+              key: tenant_dev
+        - name: TENANT_QA
+          valueFrom:
+            secretKeyRef:
+              name: portal-secret
+              key: tenant_qa
+        - name: TENANT_PROD
+          valueFrom:
+            secretKeyRef:
+              name: portal-secret
+              key: tenant_prod							  
+        lifecycle:
+          postStart:
+            exec:
+              command: ["/bin/bash", "-c", "chmod 777 /var/lib/grafana/grafana.db && chmod 777 /var/lib/grafana/png && /etc/init.d/grafana-server restart && sleep 60s && sed -i 's/$1/'$TENANT_NAME'/g' /dashboards/dashboards.sh && sed -i 's/$2/'$TENANT_DEV'/g' /dashboards/dashboards.sh && sed -i 's/$3/'$TENANT_QA'/g' /dashboards/dashboards.sh  && sed -i 's/$4/'$TENANT_PROD'/g' /dashboards/dashboards.sh  && bash /dashboards/dashboards.sh"]
+        resources:
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+        volumeMounts:
+          - mountPath: /var/lib/grafana
+            name: grafana-storage
+          - mountPath: /etc/grafana/provisioning/datasources/prometheus.yaml
+            subPath: prometheus.yaml
+            name: grafana-datasources
+          - mountPath: /etc/grafana/grafana.ini
+            subPath: grafana.ini
+            name: grafana-datasources
+            readOnly: false
+      imagePullSecrets:
+        - name: myregistrykey
+      volumes:
+        - name: grafana-storage
+          emptyDir: {}
+        - name: grafana-datasources
+          configMap:
+              defaultMode: 420
+              name: grafana-datasources

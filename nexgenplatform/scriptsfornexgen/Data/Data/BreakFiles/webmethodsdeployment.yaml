@@ -1,0 +1,278 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: buildis-pvc
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Recycle 
+  storageClassName: managed-nfs-storage    
+  nfs:
+    path: /var/nfsshare/buildis
+    server: 10.35.248.4
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: buildis-pvc
+spec:
+  storageClassName: managed-nfs-storage
+  accessModes:
+  - ReadWriteMany
+  resources:
+     requests:
+       storage: 5Gi
+  volumeName: "buildis-pvc"
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: buildis103-pvc
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Recycle 
+  storageClassName: managed-nfs-storage    
+  nfs:
+    path: /var/nfsshare/buildis103
+    server: 10.35.248.4
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: buildis103-pvc
+spec:
+  storageClassName: managed-nfs-storage
+  accessModes:
+  - ReadWriteMany
+  resources:
+     requests:
+       storage: 5Gi
+  volumeName: "buildis103-pvc"  
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: buildis107-pvc
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Recycle 
+  storageClassName: managed-nfs-storage    
+  nfs:
+    path: /var/nfsshare/buildis107
+    server: 10.35.248.4
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: buildis107-pvc
+spec:
+  storageClassName: managed-nfs-storage
+  accessModes:
+  - ReadWriteMany
+  resources:
+     requests:
+       storage: 5Gi
+  volumeName: "buildis107-pvc"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: buildis107
+  labels:
+    app: buildis107
+spec:
+  ports:
+    - port: 80
+      name: buildis107
+      targetPort: 5555
+  selector:
+    app: buildis107
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: buildis107
+  labels:
+    app: buildis107
+spec:
+  selector:
+    matchLabels:
+      app: buildis107
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: buildis107
+    spec:
+      containers:
+        - name: buildis107
+          image: cgacr711.azurecr.io/711/webmethods/integrationserver:build_server10.7.3
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5555
+          volumeMounts:
+          - name: aws-buildis
+            mountPath: "/opt/softwareag/IntegrationServer/instances/default/"
+
+          command: ["/bin/bash", "-c", "java -jar agent.jar -jnlpUrl http://jenkins/computer/web2/slave-agent.jnlp -secret 5df4ea3d972081cd5b60f32e5a33a45d7457a50224e6e1379b9c0b495f84a681 -workDir '/root/jenkins'" ]
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/bash", "-c", "/opt/softwareag/IntegrationServer/instances/default/bin/shutdown.sh && sleep 50s && /opt/softwareag/IntegrationServer/instances/default/bin/startup.sh"]
+      initContainers:
+        - name: buildis1
+          image: cgacr711.azurecr.io/711/webmethods/integrationserver:build_server10.7.3
+          volumeMounts:
+          - name: aws-buildis
+            mountPath: "/opt/softwareag/IntegrationServer/instances/empty"
+          command: ["/bin/bash", "-c", "yum install rsync -y && rsync -rv --ignore-existing /opt/softwareag/IntegrationServer/instances/default/* /opt/softwareag/IntegrationServer/instances/empty"]
+
+      imagePullSecrets:
+        - name: myregistrykey
+      volumes:
+        - name: aws-buildis
+          persistentVolumeClaim:
+            claimName: buildis107-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: is
+  labels:
+    app: cnp-is
+spec:
+  ports:
+    - port: 80
+      name: is
+      targetPort: 5555
+  selector:
+    app: cnp-is
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: is
+  labels:
+    app: cnp-is
+spec:
+  selector:
+    matchLabels:
+      app: cnp-is
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: cnp-is
+    spec:
+      containers:
+        - name: is
+          image: cgacr711.azurecr.io/711/webmethods/integrationserver:build_server1.6
+          imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1000Mi
+            limits:
+              cpu: 800m
+              memory: 2000Mi          
+          ports:
+            - containerPort: 5555
+          volumeMounts:
+          - name: aws-buildis
+            mountPath: "/opt/softwareag/IntegrationServer/instances/default/packages/WmDeployer/replicate"
+
+          command: ["/bin/bash", "-c", "java -jar agent.jar -jnlpUrl http://jenkins/computer/web/slave-agent.jnlp -secret 8114d7c77c26e7195c06892a6d6f3d071b4848e7cd963e8913719429f417c6a5 -workDir '/root/jenkins'" ]
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/bash", "-c", "/opt/softwareag/IntegrationServer/instances/default/bin/shutdown.sh && sleep 50s && /opt/softwareag/IntegrationServer/instances/default/bin/startup.sh"]
+      initContainers:
+        - name: buildis
+          image: cgacr711.azurecr.io/711/webmethods/integrationserver:build_server1.6
+          volumeMounts:
+          - name: aws-buildis
+            mountPath: "/opt/softwareag/IntegrationServer/instances/empty"
+          command: ["/bin/bash", "-c", "yum install rsync -y && rsync -rv --ignore-existing /opt/softwareag/IntegrationServer/instances/default/packages/WmDeployer/replicate/* /opt/softwareag/IntegrationServer/instances/empty"]
+
+      imagePullSecrets:
+        - name: myregistrykey
+      volumes:
+        - name: aws-buildis
+          persistentVolumeClaim:
+            claimName: buildis-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: buildis103
+  labels:
+    app: buildis103
+spec:
+  ports:
+    - port: 80
+      name: buildis103
+      targetPort: 5555
+  selector:
+    app: buildis103
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: buildis103
+  labels:
+    app: buildis103
+spec:
+  selector:
+    matchLabels:
+      app: buildis103
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: buildis103
+    spec:
+      containers:
+        - name: buildis103
+          image: cgacr711.azurecr.io/711/webmethods/integrationserver:build_server10.3.5
+          imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1000Mi
+            limits:
+              cpu: 800m
+              memory: 2000Mi                    
+          ports:
+            - containerPort: 5555
+          volumeMounts:
+          - name: aws-buildis
+            mountPath: "/opt/softwareag/IntegrationServer/instances/default/packages/WmDeployer/replicate"
+
+          command: ["/bin/bash", "-c", "java -jar agent.jar -jnlpUrl http://jenkins/computer/web1/slave-agent.jnlp -secret 2565bd801da7115c1d707e335f9e6542d52e3fe200463d26d56a32163ed5ad49 -workDir '/root/jenkins'" ]
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/bash", "-c", "/opt/softwareag/IntegrationServer/instances/default/bin/shutdown.sh && sleep 50s && /opt/softwareag/IntegrationServer/instances/default/bin/startup.sh"]
+      initContainers:
+        - name: buildis1
+          image: cgacr711.azurecr.io/711/webmethods/integrationserver:build_server10.3.5
+          volumeMounts:
+          - name: aws-buildis
+            mountPath: "/opt/softwareag/IntegrationServer/instances/empty"
+          command: ["/bin/bash", "-c", "yum install rsync -y && rsync -rv --ignore-existing /opt/softwareag/IntegrationServer/instances/default/packages/WmDeployer/replicate/* /opt/softwareag/IntegrationServer/instances/empty"]
+
+      imagePullSecrets:
+        - name: myregistrykey
+      volumes:
+        - name: aws-buildis
+          persistentVolumeClaim:
+            claimName: buildis103-pvc

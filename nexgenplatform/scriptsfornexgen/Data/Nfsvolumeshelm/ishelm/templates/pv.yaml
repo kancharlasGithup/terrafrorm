@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "ishelm.fullname" . }}-packages
+spec:
+  capacity:
+    storage: {{ .Values.service.pvStorage }}
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ .Values.service.nfsStorage }}
+  nfs:
+    server: {{ .Values.service.nfsServer }}
+    path: {{ .Values.nfsPath }}

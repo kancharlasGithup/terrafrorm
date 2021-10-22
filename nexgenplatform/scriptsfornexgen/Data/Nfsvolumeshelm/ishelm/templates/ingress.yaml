@@ -1,0 +1,21 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: {{ include "ishelm.fullname" . }}
+  annotations:
+    kubernetes.io/ingress.class: azure/application-gateway
+    appgw.ingress.kubernetes.io/health-probe-status-codes: "200-502"
+spec:
+  tls:
+  - hosts:
+    - {{ .Values.service.hosts }}
+    secretName: cnp-tls
+  rules:
+  - host: {{ .Values.service.hosts }}
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: {{ include "ishelm.fullname" . }}
+          servicePort: 80
+

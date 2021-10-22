@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ishelm.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "ishelm.name" . }}
+    helm.sh/chart: {{ include "ishelm.chart" . }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "ishelm.name" . }}
+  replicas: {{ .Values.replicaCount }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "ishelm.name" . }}
+    spec:
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: 3306
+        env:
+          - name: ISSERVICE_NAME
+            value: {{ .Values.integrationServer }}
+        volumeMounts:
+        - name: aws-config
+          mountPath: "/var/lib/config"
+          readOnly: true
+        - name: aws-mysql
+          mountPath: "/var/lib/mysql-no-volume"
+        lifecycle:
+          postStart:
+            exec:
+              command: ["/bin/bash", "-c","sleep 30 && cp /var/lib/config/updatevalue.sh /var/lib/ && chmod 777 /var/lib/updatevalue.sh  && /var/lib/updatevalue.sh $ISSERVICE_NAME "]
+      initContainers:
+        - name: mysql1
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          volumeMounts:
+          - name: aws-mysql
+            mountPath: "/var/lib/empty"
+          command: ["/bin/bash", "-c", "yum install rsync -y  && rsync -rv --ignore-existing /var/lib/mysql-no-volume/* /var/lib/empty"]
+
+      imagePullSecrets:
+      - name: myregistrykey
+      volumes:
+        - name: aws-config
+          configMap:
+            name: mysqlvalue-config
+        - name: aws-mysql
+          persistentVolumeClaim:
+            claimName: {{ include "ishelm.name" . }}

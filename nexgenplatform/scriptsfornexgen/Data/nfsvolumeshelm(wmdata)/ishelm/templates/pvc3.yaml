@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "ishelm.fullname" . }}-wmdata
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: {{ .Values.service.nfsStorage }}
+  resources:
+    requests:
+      storage: {{ .Values.service.wmdataStorage }}
+  volumeName: {{ include "ishelm.fullname" . }}-wmdata

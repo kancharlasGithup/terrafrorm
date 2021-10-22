@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ishelm.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "ishelm.name" . }}
+    helm.sh/chart: {{ include "ishelm.chart" . }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "ishelm.name" . }}
+  replicas: {{ .Values.replicaCount }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "ishelm.name" . }}
+    spec:
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: 5555
+        env:
+          - name: UMSERVICE_NAME
+            value: {{ .Values.universalMessaging }}
+          - name: MWSSERVICE_NAME
+            value: {{ .Values.myWebMethod }}
+          - name: MYSQLSERVICE_NAME
+            value: {{ .Values.mysqlServer }}
+        volumeMounts:
+          - name: aws-is
+            mountPath: "/opt/softwareag/IntegrationServer/instances/default/packages"
+          - name: configis
+            mountPath: "/opt/softwareag/IntegrationServer/instances/default/config"
+          - name: confis
+            mountPath: "/opt/softwareag/common/conf"
+
+        lifecycle:
+          postStart:
+            exec:
+              #command: ["/bin/bash", "-c","sleep 120 && cd /opt/softwareag  && mkdir $UMSERVICE_NAME "]
+              #command: ["/bin/bash", "-c", "sleep 120 && cd opt/softwareag/IntegrationServer/instances/default/config  && sed -i 's/localhost:9000/'$UMSERVICE_NAME'/g' messaging.cnf "]
+              #command: ["/bin/bash", "-c", "sleep 120 && cd opt/softwareag/IntegrationServer/instances/default/config  && sed -i 's/localhost:9000/'$UMSERVICE_NAME'/g' messaging.cnf && sed -i 's/online/'$MWSSERVICE_NAME'/g' server.cnf"]
+              #command: ["/bin/bash", "-c", "sleep 120 && cd opt/softwareag/IntegrationServer/instances/default/config && sed -i 's/nsp/nhp/g' messaging.cnf  && sed -i 's/localhost:9000/'$UMSERVICE_NAME'/g' messaging.cnf && sed -i 's/localhost/'$MWSSERVICE_NAME'/g' server.cnf && sed -i 's/:8585/ /g' server.cnf "]
+              command: ["/bin/bash", "-c", "/opt/softwareag/IntegrationServer/instances/default/bin/startup.sh && sleep 180 && /opt/softwareag/IntegrationServer/instances/default/bin/shutdown.sh && sleep 50  && cd opt/softwareag/IntegrationServer/instances/default/config && sed -i 's/nsp/nhp/g' messaging.cnf  && sed -i 's/localhost/'$UMSERVICE_NAME'/g' messaging.cnf && sed -i -e '/samlResolver=/s/localhost/'$MWSSERVICE_NAME'/' server.cnf && sed -i 's/:8585/:80/g' server.cnf && sed -i 's/mysql-ser/'$MYSQLSERVICE_NAME'/g' /opt/softwareag/IntegrationServer/instances/default/config/jdbc/pool/defaultConn.xml &&  if [[ -f /opt/softwareag/IntegrationServer/instances/default/config/jdbc/pool/CentralUserMgmt.xml ]] ; then sed -i 's/mysql-ser/'$MYSQLSERVICE_NAME'/g' /opt/softwareag/IntegrationServer/instances/default/config/jdbc/pool/CentralUserMgmt.xml; fi && sleep 10  && /opt/softwareag/IntegrationServer/instances/default/bin/startup.sh"]
+      initContainers:
+        - name: is1
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          volumeMounts:
+          - name: aws-is
+            mountPath: "/opt/empty"
+          - name: configis
+            mountPath: "/opt/empty1"
+          - name: confis
+            mountPath: "/opt/empty2"
+          command: ["/bin/bash", "-c", "yum install rsync -y && rsync -rv --ignore-existing /opt/softwareag/IntegrationServer/instances/default/packages/* /opt/empty && rsync -rv --ignore-existing /opt/softwareag/IntegrationServer/instances/default/config/* /opt/empty1 && rsync -rv --ignore-existing /opt/softwareag/common/conf/* /opt/empty2"]
+      imagePullSecrets:
+      - name: myregistrykey
+      volumes:
+        - name: aws-is
+          persistentVolumeClaim:
+            claimName: {{ include "ishelm.name" . }}-packages
+        - name: configis
+          persistentVolumeClaim:
+            claimName: {{ include "ishelm.name" . }}-config
+        - name: confis
+          persistentVolumeClaim:
+            claimName: {{ include "ishelm.name" . }}-conf
+

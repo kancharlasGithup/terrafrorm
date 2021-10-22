@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ishelm.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "ishelm.name" . }}
+    helm.sh/chart: {{ include "ishelm.chart" . }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 3306
+      name: http
+  selector:
+    app.kubernetes.io/name: {{ include "ishelm.name" . }}

@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ishelm.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "ishelm.name" . }}
+    helm.sh/chart: {{ include "ishelm.chart" . }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "ishelm.name" . }}
+  replicas: {{ .Values.replicaCount }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "ishelm.name" . }}
+    spec:
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: 9000
+        volumeMounts:
+          - name: aws-um
+            mountPath: "/opt/softwareag/UniversalMessaging/server/umserver/data"
+      initContainers:
+        - name: um1
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          volumeMounts:
+          - name: aws-um
+            mountPath: "/opt/empty"
+          command: ["/bin/bash", "-c", "yum install rsync -y && rsync -rv --ignore-existing /opt/softwareag/UniversalMessaging/server/umserver/data/* /opt/empty"]
+      imagePullSecrets:
+      - name: myregistrykey
+      volumes:
+        - name: aws-um
+          persistentVolumeClaim:
+            claimName: {{ include "ishelm.name" . }}

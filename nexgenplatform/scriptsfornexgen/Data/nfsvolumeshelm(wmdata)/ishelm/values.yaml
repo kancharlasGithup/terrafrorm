@@ -1,0 +1,65 @@
+# Default values for ishelm.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+myWebMethod: demos
+universalMessaging: demos
+integrationServer: demos
+mysqlServer: demos
+nfsPath: /var/nfsshare/amazon/dev/
+nfspathconfig: /var/nfsshare/amazon/dev1/
+nfspathconf: /var/nfsshare/amazon/dev2/
+wmdataserverpath: /var/nfsshare/amazon/dev3/
+image:
+  repository: 155363134060.dkr.ecr.us-west-1.amazonaws.com/cnp-webmethods
+  tag: demo
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  port: 80
+  hosts: isdemo.cnp.cgnextgen.io
+  accessMode: ReadWriteOnce
+  size: 10Gi
+  storageClass: devsc
+  pvStorage: 10Gi
+  configisStorage: 2Gi
+  isconfpvStorage: 1Gi
+  nfsStorage: managed-nfs-storage
+  nfsServer: 10.90.143.133
+  wmdatanfsprivateip: 10.90.143.133
+  wmdataStorage: 50Gi
+
+ingress:
+  enabled: false
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  paths: []
+  hosts:
+    - isdemo.cnp.cgnextgen.io
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #  cpu: 100m
+  #  memory: 128Mi
+  # requests:
+  #  cpu: 100m
+  #  memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
